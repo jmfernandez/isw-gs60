@@ -9,9 +9,17 @@ from argparse import ArgumentParser
 from argparse import Action
 from argparse import RawTextHelpFormatter
 
+from functools import partial as p
+
 # Global vars
 EC_IO_FILE = '/sys/kernel/debug/ec/ec0/io'
+LOCAL_CFG_FILE = os.path.join(os.path.dirname(__file__),'etc','isw.conf')
 CFG_FILE = '/etc/isw.conf'
+
+if os.path.exists(LOCAL_CFG_FILE):
+    chosen_cfg_file = LOCAL_CFG_FILE
+else:
+    chosen_cfg_file = CFG_FILE
 
 # Text formating
 class Text:
@@ -35,9 +43,9 @@ class Store:
 	list_s = []
 
 # First level functions
-def ec_boost(value):
+def ec_boost(value, cfg_file=CFG_FILE):
 	# Option -b, enable or disable CoolerBoost
-	with open(CFG_FILE) as cfgfile:
+	with open(cfg_file) as cfgfile:
 		cfgp = configparser.ConfigParser()
 		cfgp.read_file(cfgfile)
 		ap = cfgp.get('COOLER_BOOST', 'address_profile')
@@ -129,10 +137,10 @@ def file_profile(value):
 				      hex(list_gfs[i+h])+'('+str(list_gfs[i+h])+'%)',
 				      hex(list_gfsa[i+h])+'(byte'+str(list_gfsa[i+h])+')'))
 
-def ec_profile(value):
+def ec_profile(value, cfg_file=CFG_FILE):
 	# Option -p, show current profile in EC
 	print('\nProfile dump '+str(Store.dump_pos))
-	with open(CFG_FILE) as cfgfile:
+	with open(cfg_file) as cfgfile:
 		cfgp = configparser.ConfigParser()
 		cfgp.read_file(cfgfile)
 		list_cta = []
@@ -217,9 +225,9 @@ def ec_profile(value):
 			      hex(list_gfs[i])+'('+str(list_gfs[i])+'%)',
 			      hex(list_gfsa[i])+'(byte'+str(list_gfsa[i])+')'))
 
-def ec_read(value):
+def ec_read(value, cfg_file=CFG_FILE):
 	# Option -r, show realtime CPU+GPU temp and fan speed from EC
-	with open(CFG_FILE) as cfgfile:
+	with open(cfg_file) as cfgfile:
 		cfgp = configparser.ConfigParser()
 		cfgp.read_file(cfgfile)
 		rcta = int(cfgp.get('MSI_ADDRESS_DEFAULT', 'realtime_cpu_temp_address'),16)
@@ -269,9 +277,9 @@ def ec_set(value):
 	if len(Store.list_s) == 2:
 		single_write(int(Store.list_s[0],16), int(Store.list_s[1]))
 
-def ec_battery_threshold(value):
+def ec_battery_threshold(value, cfg_file=CFG_FILE):
 	# Option -t, set the battery charging threshold
-	with open(CFG_FILE) as cfgfile:
+	with open(cfg_file) as cfgfile:
 		cfgp = configparser.ConfigParser()
 		cfgp.read_file(cfgfile)
 		cbta = int(cfgp.get('MSI_ADDRESS_DEFAULT', 'battery_charging_threshold_address'),16)
@@ -282,9 +290,9 @@ def ec_battery_threshold(value):
 			      +Text.ULINED+'20'+Text.CLEAR+' and '
 			      +Text.ULINED+'100'+Text.CLEAR+' are valid.')
 
-def ec_usb_backlight(value):
+def ec_usb_backlight(value, cfg_file=CFG_FILE):
 	# Option -u, set usb backlight level
-	with open(CFG_FILE) as cfgfile:
+	with open(cfg_file) as cfgfile:
 		cfgp = configparser.ConfigParser()
 		cfgp.read_file(cfgfile)
 		ap = cfgp.get('USB_BACKLIGHT', 'address_profile')
@@ -303,11 +311,11 @@ def ec_usb_backlight(value):
 			      +Text.ULINED+'half'+Text.CLEAR+' and '
 			      +Text.ULINED+'full'+Text.CLEAR+' are valid.')
 
-def ec_write(value):
+def ec_write(value, cfg_file=CFG_FILE):
 	# Option -w, write into EC
 	Store.dump_pos = 'after modification'
 	print('\nWriting config to EC...')
-	with open(CFG_FILE) as cfgfile:
+	with open(cfg_file) as cfgfile:
 		cfgp = configparser.ConfigParser()
 		cfgp.read_file(cfgfile)
 		list_cta = []
@@ -450,7 +458,7 @@ def main():
 │ It means Ice-Sealed Wyvern in opposition to MSI's 'unleash the dragon'  │
 └─────────────────────────────────────────────────────────────────────────┘
 ''')
-	parser.add_argument('-b', type = ec_boost,
+	parser.add_argument('-b', type = p(ec_boost, cfg_file=chosen_cfg_file),
 	                    help = '┬ enable or disable CoolerBoost\n'
 	                           '└ replace '+Text.ULINED+'B'+Text.CLEAR+' with '
 	                           +Text.ULINED+'off'+Text.CLEAR+' OR '
@@ -461,11 +469,11 @@ def main():
 	                    help = '┬ show profile in EC update file\n'
 	                           '└ replace '+Text.ULINED+'FILE'+Text.CLEAR+' with '
 	                           +Text.ULINED+'FILE_NAME'+Text.CLEAR+'\n ')
-	parser.add_argument('-p', type = ec_profile,
+	parser.add_argument('-p', type = p(ec_profile, cfg_file=chosen_cfg_file),
 	                    help = '┬ show current profile in EC\n'
 	                           '└ replace '+Text.ULINED+'P'+Text.CLEAR+' with '
 	                           +Text.ULINED+'SECTION_NAME'+Text.CLEAR+'\n ')
-	parser.add_argument('-r', type = ec_read, nargs = '?', const = '0',
+	parser.add_argument('-r', type = p(ec_read, cfg_file=chosen_cfg_file), nargs = '?', const = '0',
 	                    help = '┬ show realtime CPU+GPU temp and fan speed from EC\n'
 	                           '├ replace [R] with any [NUMBER] to perform a [NUMBER] of time(s)\n'
 	                           '└ Assume [0] if given nothing = infinite loop\n ')
@@ -475,19 +483,19 @@ def main():
 	                           +Text.ULINED+'ADDRESS'+Text.CLEAR+' in hexadecimal (0x00)\n'
 	                           '└ replace 2nd '+Text.ULINED+'S'+Text.CLEAR+' with '
 	                           +Text.ULINED+'VALUE'+Text.CLEAR+'   in decimal     (00)\n ')
-	parser.add_argument('-t', type = ec_battery_threshold,
+	parser.add_argument('-t', type = p(ec_battery_threshold, cfg_file=chosen_cfg_file),
 	                    help = '┬ set the battery charging threshold\n'
 	                           '└ replace '+Text.ULINED+'T'+Text.CLEAR+' with a '
 	                           +Text.ULINED+'NUMBER'+Text.CLEAR+' between '
 	                           +Text.ULINED+'20'+Text.CLEAR+' and '
 	                           +Text.ULINED+'100'+Text.CLEAR+' (٪)\n ')
-	parser.add_argument('-u', '--usb', type = ec_usb_backlight,
+	parser.add_argument('-u', '--usb', type = p(ec_usb_backlight, cfg_file=chosen_cfg_file),
 	                    help = '┬ set usb backlight level\n'
 	                           '└ replace '+Text.ULINED+'USB'+Text.CLEAR+' with '
 	                           +Text.ULINED+'off'+Text.CLEAR+', '
 	                           +Text.ULINED+'half'+Text.CLEAR+' OR '
 	                           +Text.ULINED+'full'+Text.CLEAR+'\n ')
-	parser.add_argument('-w', type = ec_write,
+	parser.add_argument('-w', type = p(ec_write, cfg_file=chosen_cfg_file),
 	                    help = '┬ write into EC\n'
 	                           '└ replace '+Text.ULINED+'W'+Text.CLEAR+' with '
 	                           +Text.ULINED+'SECTION_NAME'+Text.CLEAR+'')
